@@ -325,3 +325,53 @@
   --light-section-bg:   rgba(252,253,254,.78);   /* 78% so the document-tall wave layer shows through on light sections */
   --dark-section-bg:    rgba(11,18,32,.88);       /* 88% so the wave layer stays muted under dark sections (rhythm chapter break) */
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EN/ES LANGUAGE TOGGLE — appears in the marketing top nav
+   Mounted by discovery/marketing.js into [data-arq-lang-mount]
+   ═══════════════════════════════════════════════════════════════════════ */
+.arq-langtoggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-right: 12px;
+}
+.arq-langtoggle__btn{
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: rgba(0,0,0,.55);
+  transition: color 150ms ease;
+}
+.arq-langtoggle__btn:hover{ color: #000; }
+.arq-langtoggle__btn.is-active{
+  color: var(--arq, #2563eb);
+  font-weight: 600;
+}
+.arq-langtoggle__sep{
+  color: rgba(0,0,0,.22);
+  padding: 0 2px;
+}
+/* Dark nav variants (marketing site dark sections + admin/profile chrome) */
+.is-dark .arq-langtoggle__btn,
+[data-theme="dark"] .arq-langtoggle__btn{
+  color: rgba(255,255,255,.55);
+}
+.is-dark .arq-langtoggle__btn:hover,
+[data-theme="dark"] .arq-langtoggle__btn:hover{ color: #fff; }
+.is-dark .arq-langtoggle__btn.is-active,
+[data-theme="dark"] .arq-langtoggle__btn.is-active{
+  color: var(--signal-pale, #60a5fa);
+}
+.is-dark .arq-langtoggle__sep,
+[data-theme="dark"] .arq-langtoggle__sep{
+  color: rgba(255,255,255,.22);
+}

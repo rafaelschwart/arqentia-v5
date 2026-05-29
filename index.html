@@ -7522,15 +7522,16 @@
   <div class="container row">
     <a href="#cover" class="brand">Arq<em>e</em>ntia. <span class="v">// V02 · REL 26.06</span></a>
     <ul class="links">
-      <li><a href="#industry">Sectors</a></li>
-      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#industry" data-i18n="nav.industries">Sectors</a></li>
+      <li><a href="#pricing" data-i18n="nav.pricing">Pricing</a></li>
       <li><a href="#faq">FAQ</a></li>
-      <li><a href="/discovery">Discovery</a></li>
+      <li><a href="/discovery" data-i18n="nav.contact">Discovery</a></li>
     </ul>
     <div class="right">
+      <span data-arq-lang-mount></span>
       <span class="pill"><span class="dot"></span>FLORIDA — LIMA</span>
       <a href="/discovery/login" class="btn btn-ghost" data-event="nav_signin_click">Sign in</a>
-      <a href="/discovery" class="btn btn-primary" data-event="nav_cta_click">Request review →</a>
+      <a href="/discovery" class="btn btn-primary" data-event="nav_cta_click" data-i18n="hero.cta.primary">Request review →</a>
     </div>
   </div>
 </nav>
@@ -7545,7 +7546,9 @@
       <div class="eyebrow desktop-only"><span class="bar"></span>// COVER · ENGINEERING FIRM · ARCHITECTURE OF BUSINESS UNDER AI</div>
       <!-- MOBILE-ONLY · 2026-05-15 · mobile-redesign engagement · compressed eyebrow fits 375px without 3-line wrap -->
       <div class="eyebrow mobile-only"><span class="bar"></span>// COVER · ENGINEERING · ARCHITECTURE UNDER AI</div>
-      <h1 id="cover-h">Build systems that <em>run</em> themselves.</h1>
+      <h1 id="cover-h">
+        <span data-i18n="hero.heading.before">Build systems that </span><em data-i18n="hero.heading.em">run</em><span data-i18n="hero.heading.after"> themselves.</span>
+      </h1>
       <!-- Desktop dek -->
       <p class="dek desktop-only">
         <b>Arqentia</b> is an engineering firm for the architecture of business in the age of AI. Where others install tools, we design the <em>auditable, adaptive</em> infrastructure that runs beneath them.
@@ -11528,5 +11531,7 @@
     } catch (e) { /* cookie access blocked — leave nav as is */ }
   })();
 </script>
+<!-- EN/ES marketing translation toggle — see discovery/marketing.js -->
+<script type="module" src="/discovery/marketing.js"></script>
 </body>
 </html>
