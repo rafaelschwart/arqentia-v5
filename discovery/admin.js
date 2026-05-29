@@ -141,6 +141,8 @@ const STRINGS = {
     'detail.prospect_view':   'Prospect view ↗',
     'detail.costs':           'API costs',
     'detail.open_demo':       'Open demo full-screen ↗',
+    'detail.regen.btn':       '⟳ Regenerate in {lang}',
+    'detail.regen.title':     'This prospect’s summary and dashboard were generated in a different language. Click to regenerate them in the current admin language.',
     'detail.section.summary': '// AI SUMMARY',
     'detail.section.demo':    '// PERSONALIZED DEMO DASHBOARD',
     'detail.section.answers': '// ANSWERS',
@@ -172,6 +174,9 @@ const STRINGS = {
     'editor.attach':          'Attach image',
     'editor.mainAgent':       'Main agent',
     'admin.lang.regen_prompt':'Regenerate this prospect’s dashboard in the new language? This will overwrite the current edits.',
+    'admin.lang.regen_toast': 'Regenerating prospect content in the new language…',
+    'admin.lang.regen_done':  'Prospect content regenerated.',
+    'admin.lang.regen_error': 'Regeneration failed. Try again or check the console.',
     'empty.detail.eye':       '// no prospect selected',
     'empty.detail.heading':   'Pick someone on the left.',
     'empty.detail.sub':       'Their profile summary, full discovery answers, and the personalized demo dashboard show up here. Edits route through the 12-agent suite.',
@@ -269,6 +274,8 @@ const STRINGS = {
     'detail.prospect_view':   'Vista del prospecto ↗',
     'detail.costs':           'Costos API',
     'detail.open_demo':       'Abrir demo pantalla completa ↗',
+    'detail.regen.btn':       '⟳ Regenerar en {lang}',
+    'detail.regen.title':     'El resumen y el dashboard de este prospecto fueron generados en otro idioma. Haz clic para regenerarlos en el idioma actual del admin.',
     'detail.section.summary': '// RESUMEN IA',
     'detail.section.demo':    '// DASHBOARD DE DEMO PERSONALIZADO',
     'detail.section.answers': '// RESPUESTAS',
@@ -300,6 +307,9 @@ const STRINGS = {
     'editor.attach':          'Adjuntar imagen',
     'editor.mainAgent':       'Agente principal',
     'admin.lang.regen_prompt':'¿Regenerar el dashboard de este prospecto en el nuevo idioma? Se sobrescribirán las ediciones actuales.',
+    'admin.lang.regen_toast': 'Regenerando contenido del prospecto en el nuevo idioma…',
+    'admin.lang.regen_done':  'Contenido del prospecto regenerado.',
+    'admin.lang.regen_error': 'La regeneración falló. Intenta de nuevo o revisa la consola.',
     'empty.detail.eye':       '// sin prospecto seleccionado',
     'empty.detail.heading':   'Elige a alguien a la izquierda.',
     'empty.detail.sub':       'Su resumen, sus respuestas del discovery y el dashboard personalizado aparecen aquí. Las ediciones pasan por los 12 agentes especializados.',
@@ -1033,6 +1043,14 @@ function renderDetail() {
           </p>
         </div>
         <div class="adm-detail__actions">
+          ${(() => {
+            const d = detectLanguageDrift();
+            if (!d.any) return '';
+            return `<button type="button" class="adm-btn adm-btn--accent" data-action="regen-content"
+                      title="${esc(T('detail.regen.title'))}">
+                      ${esc(T('detail.regen.btn').replace('{lang}', d.toLang.toUpperCase()))}
+                    </button>`;
+          })()}
           <a class="adm-btn" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(T('detail.prospect_view'))}</a>
           <button type="button" class="adm-btn" data-action="open-costs" data-prospect-id="${esc(prospect.id)}">${esc(T('detail.costs'))}</button>
           <a class="adm-btn adm-btn--primary" href="${esc(demoUrlAdmin)}" target="_blank" rel="noopener">${esc(T('detail.open_demo'))}</a>
@@ -1324,6 +1342,110 @@ async function generateDashboard({ language, force } = {}) {
   render();
 }
 
+// Detect whether the currently-loaded prospect has artifacts in a language
+// other than the admin chrome. Returns { summaryStale, dashboardStale, any,
+// fromLang, toLang } so the UI can show a "Regenerar contenido" banner.
+function detectLanguageDrift() {
+  const detail = state.detail;
+  const toLang = admLang();
+  const empty = { summaryStale: false, dashboardStale: false, any: false, fromLang: null, toLang };
+  if (!detail || !detail.prospect) return empty;
+
+  const summaryLang = detail.summary?.summary_language || detail.prospect.language || null;
+  const payloadLang = detail.demo?.payload?.language     || detail.prospect.language || null;
+  const summaryStale   = !!detail.summary && summaryLang && summaryLang !== toLang;
+  const dashboardStale = !!detail.demo    && payloadLang && payloadLang !== toLang;
+  return {
+    summaryStale,
+    dashboardStale,
+    any: summaryStale || dashboardStale,
+    fromLang: summaryLang || payloadLang || null,
+    toLang
+  };
+}
+
+// Regenerate this prospect's AI summary AND / OR demo dashboard in the
+// given language. Runs both in parallel when both are stale, then does a
+// single fresh detail-refetch so the UI shows whichever artifact landed
+// last (fixes the race where dashboard regen's internal refetch could grab
+// the old summary).
+async function regenerateProspectContent(newLang) {
+  const drift = detectLanguageDrift();
+  if (!drift.any) return;
+  if (state.generating) return;
+  if (!state.selectedId) return;
+
+  const prospectId = state.selectedId;
+  state.generating = true;
+  state.generateError = null;
+  // Toast so the user knows work is happening — generateDashboard sets
+  // its own spinner state, but the summary regen is otherwise invisible.
+  showAdminToast(T('admin.lang.regen_toast'));
+  render();
+
+  const tasks = [];
+  if (drift.summaryStale) {
+    tasks.push(
+      fetch('/api/admin/regenerate-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospect_id: prospectId, language: newLang })
+      }).then(r => r.json().catch(() => ({}))).catch(e => ({ ok: false, error: e?.message }))
+    );
+  }
+  if (drift.dashboardStale) {
+    tasks.push(
+      fetch('/api/admin/dashboard-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospect_id: prospectId, language: newLang, force: true })
+      }).then(r => r.json().catch(() => ({}))).catch(e => ({ ok: false, error: e?.message }))
+    );
+  }
+
+  let failed = false;
+  try {
+    const results = await Promise.all(tasks);
+    for (const r of results) {
+      if (r && r.ok === false) failed = true;
+    }
+  } catch {
+    failed = true;
+  }
+
+  // Refetch the detail ONCE, after both tasks have settled, so the UI
+  // shows the latest persisted state regardless of which finished first.
+  try {
+    const fresh = await apiGet(`/prospects?id=${encodeURIComponent(prospectId)}`);
+    if (state.selectedId === prospectId) state.detail = fresh;
+    state.editor.iframeBuster = Date.now();
+  } catch (e) {
+    failed = true;
+  }
+
+  state.generating = false;
+  render();
+  if (failed) {
+    showAdminToast(T('admin.lang.regen_error'), 'error');
+  } else {
+    showAdminToast(T('admin.lang.regen_done'), 'ok');
+  }
+}
+
+// Lightweight bottom-right toast. Stacks multiple briefly.
+function showAdminToast(msg, kind = 'info') {
+  const el = document.createElement('div');
+  el.className = `adm-toast adm-toast--${kind}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  // Animate in
+  requestAnimationFrame(() => el.classList.add('is-shown'));
+  setTimeout(() => {
+    el.classList.remove('is-shown');
+    setTimeout(() => el.remove(), 240);
+  }, kind === 'error' ? 4500 : 2400);
+}
+
 // Image helper — turn a File into { name, mediaType, dataUrl, base64 }
 function fileToImagePayload(file) {
   return new Promise((resolve, reject) => {
@@ -1481,6 +1603,13 @@ function bindEvents() {
         closeCostsModal();
         return;
       }
+      // Manual "regenerate prospect content in current language" button on
+      // the detail header — runs the same regen pipeline the lang toggle
+      // would have triggered.
+      if (action === 'regen-content') {
+        await regenerateProspectContent(admLang());
+        return;
+      }
 
       const id = btn.dataset.id;
       if (!id) return;
@@ -1521,9 +1650,11 @@ function bindEvents() {
 
   // EN/ES toggle — persists to localStorage + re-renders. When a prospect
   // detail is open AND its content was generated in the OTHER language,
-  // offer to regenerate (a) the 2-sentence AI summary and (b) the demo
-  // dashboard payload — both in the new language so the whole prospect
-  // view matches the admin chrome.
+  // automatically regenerates both the AI summary AND the demo dashboard
+  // in the new language. No blocking confirm — a non-blocking toast +
+  // spinner makes it obvious work is happening; the explicit
+  // "Regenerar contenido" button on the detail header is the manual
+  // fallback if the auto-regen is skipped for any reason.
   document.querySelectorAll('[data-set-lang]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const newLang = btn.dataset.setLang;
@@ -1531,59 +1662,8 @@ function bindEvents() {
       setAdmLang(newLang);
       render();
       if (newLang === oldLang) return;
-
-      // No prospect open → nothing to regenerate.
-      const detail = state.detail;
-      if (!detail || !detail.prospect) return;
-
-      // Detect language drift on either artifact (summary or dashboard payload).
-      const summaryLang = detail.summary?.summary_language
-        || detail.prospect.language
-        || null;
-      const payloadLang = detail.demo?.payload?.language
-        || detail.prospect.language
-        || null;
-      const summaryStale = !!detail.summary && summaryLang && summaryLang !== newLang;
-      const dashboardStale = !!detail.demo && payloadLang && payloadLang !== newLang;
-      if (!summaryStale && !dashboardStale) return;
-
-      const ok = confirm(T('admin.lang.regen_prompt'));
-      if (!ok) return;
-
-      const prospectId = detail.prospect.id;
-      // Mark detail as regenerating so the UI shows a spinner / dimmed state.
-      state.generating = true;
-      render();
-
-      // Fire summary regen + dashboard regen in PARALLEL — they're
-      // independent and both bottleneck on Claude latency. If only one
-      // artifact is stale, the other call is skipped.
-      const calls = [];
-      if (summaryStale) {
-        calls.push(
-          fetch('/api/admin/regenerate-summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prospect_id: prospectId, language: newLang })
-          }).catch(e => ({ ok: false, error: e?.message }))
-        );
-      }
-      if (dashboardStale) {
-        calls.push(generateDashboard({ language: newLang, force: true }));
-      } else {
-        // generateDashboard handles its own render(); if we skipped it, do
-        // a manual detail refetch so the new summary appears.
-        calls.push(
-          (async () => {
-            const fresh = await apiGet(`/prospects?id=${encodeURIComponent(prospectId)}`);
-            if (state.selectedId === prospectId) state.detail = fresh;
-            state.editor.iframeBuster = Date.now();
-          })()
-        );
-      }
-      await Promise.all(calls);
-      state.generating = false;
-      render();
+      // Fire-and-forget — the helper is responsible for its own UI state.
+      regenerateProspectContent(newLang);
     });
   });
 

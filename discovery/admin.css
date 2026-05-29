@@ -493,6 +493,40 @@
   background: var(--signal-pale,#60a5fa); color: #0B1220; border-color: var(--signal-pale,#60a5fa);
 }
 .adm-btn--primary:hover{ background: #fff; border-color: #fff; color: #0B1220; }
+/* Accent button — used for the "Regenerate in [lang]" CTA on the detail
+   header when there's language drift between admin chrome and prospect
+   content. Amber so it reads as an attention-needing action. */
+.adm-btn--accent{
+  background: rgba(253,230,138,.08);
+  border-color: rgba(253,230,138,.45);
+  color: #fde68a;
+}
+.adm-btn--accent:hover{
+  background: rgba(253,230,138,.18);
+  border-color: #fde68a;
+  color: #fff;
+}
+
+/* ─── Bottom-right toast (admin) ─── */
+.adm-toast{
+  position: fixed; right: 24px; bottom: 24px;
+  z-index: 100;
+  padding: 12px 16px;
+  font-family: var(--font-body); font-size: 13px;
+  background: rgba(11,18,32,.96);
+  border: 1px solid rgba(96,165,250,.4);
+  color: #fff;
+  box-shadow: 0 8px 32px -8px rgba(0,0,0,.5);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  max-width: 360px;
+}
+.adm-toast.is-shown{ opacity: 1; transform: translateY(0); }
+.adm-toast--ok{ border-color: rgba(134,239,172,.45); }
+.adm-toast--error{ border-color: rgba(252,165,165,.55); color: #fca5a5; }
+@media (prefers-reduced-motion: reduce){
+  .adm-toast{ transition: opacity 0.01ms; transform: none; }
+}
 
 /* ─── Section blocks ────────────────────────────────────────────────────── */
 .adm-section{
