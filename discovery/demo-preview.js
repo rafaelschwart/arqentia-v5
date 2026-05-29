@@ -1137,16 +1137,30 @@ async function loadAndRender() {
     return;
   }
 
-  // Live mode: fetch from API
+  // Live mode: fetch from API. Cache-bust the request so an iframe reload
+  // after a fresh regen never reads a stale cached response.
+  // Retry once on `status: 'pending'` with a 1.5s back-off — covers the
+  // brief window between admin-side dashboard-generate finishing its upsert
+  // and the prospect-side demo endpoint seeing the row.
   renderPending(false);
+  const fetchDemo = async () => {
+    const buster = Date.now();
+    const data = await api(`/demo?token=${encodeURIComponent(state.token)}&_t=${buster}`);
+    console.info('[demo-preview] /demo →', data?.status, data?.payload ? '(has payload)' : '(no payload)', data?.generated_at || '');
+    return data;
+  };
   try {
-    const data = await api(`/demo?token=${encodeURIComponent(state.token)}`);
+    let data = await fetchDemo();
     if (data.status === 'pending') {
-      renderPending(state.isInternal);
-    } else if (data.status === 'ready' && data.payload) {
+      console.info('[demo-preview] pending, retrying in 1.5s…');
+      await new Promise(r => setTimeout(r, 1500));
+      data = await fetchDemo();
+    }
+    if (data.status === 'ready' && data.payload) {
       state.payload = data.payload;
       safeRender(state.payload);
     } else {
+      console.warn('[demo-preview] still pending or no payload after retry — showing pending state');
       renderPending(state.isInternal);
     }
   } catch (err) {

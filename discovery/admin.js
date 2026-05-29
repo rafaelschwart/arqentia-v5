@@ -1463,6 +1463,24 @@ async function regenerateProspectContent(newLang) {
     failed = true;
   }
 
+  // Force the embedded demo iframe to reload from scratch. Changing the
+  // `src` via render() works most of the time, but if the browser was in
+  // the middle of a load when we rebuilt the DOM the new iframe element
+  // can stay in the "Generating…" placeholder. An explicit reload on the
+  // live iframe element after render guarantees a fresh demo-preview.js
+  // init that picks up the new payload.
+  requestAnimationFrame(() => {
+    try {
+      const iframe = document.querySelector('.adm-demo__frame');
+      if (iframe && iframe.contentWindow) {
+        // Reassign src with the latest buster — most reliable cross-browser
+        // way to force a hard reload of an iframe.
+        const base = iframe.src.split('?')[0];
+        iframe.src = `${base}?internal=1&_t=${state.editor.iframeBuster}`;
+      }
+    } catch {}
+  });
+
   state.generating = false;
   state.regen = null;
   render();
