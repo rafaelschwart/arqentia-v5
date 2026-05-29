@@ -1520,10 +1520,10 @@ function bindEvents() {
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
   // EN/ES toggle — persists to localStorage + re-renders. When a prospect
-  // detail is open AND its demo payload was generated in the OTHER language,
-  // offer to regenerate the dashboard in the new language so the iframe
-  // matches the admin chrome (otherwise admin reads "Manufactura" while
-  // chrome reads "Manufacturing").
+  // detail is open AND its content was generated in the OTHER language,
+  // offer to regenerate (a) the 2-sentence AI summary and (b) the demo
+  // dashboard payload — both in the new language so the whole prospect
+  // view matches the admin chrome.
   document.querySelectorAll('[data-set-lang]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const newLang = btn.dataset.setLang;
@@ -1532,17 +1532,58 @@ function bindEvents() {
       render();
       if (newLang === oldLang) return;
 
-      // If a prospect detail is open and they have a generated demo whose
-      // payload language doesn't match, prompt to regenerate.
+      // No prospect open → nothing to regenerate.
       const detail = state.detail;
-      const payloadLang = detail?.demo?.payload?.language
-        || detail?.prospect?.language
+      if (!detail || !detail.prospect) return;
+
+      // Detect language drift on either artifact (summary or dashboard payload).
+      const summaryLang = detail.summary?.summary_language
+        || detail.prospect.language
         || null;
-      if (!detail || !detail.demo || !payloadLang || payloadLang === newLang) return;
+      const payloadLang = detail.demo?.payload?.language
+        || detail.prospect.language
+        || null;
+      const summaryStale = !!detail.summary && summaryLang && summaryLang !== newLang;
+      const dashboardStale = !!detail.demo && payloadLang && payloadLang !== newLang;
+      if (!summaryStale && !dashboardStale) return;
 
       const ok = confirm(T('admin.lang.regen_prompt'));
       if (!ok) return;
-      await generateDashboard({ language: newLang, force: true });
+
+      const prospectId = detail.prospect.id;
+      // Mark detail as regenerating so the UI shows a spinner / dimmed state.
+      state.generating = true;
+      render();
+
+      // Fire summary regen + dashboard regen in PARALLEL — they're
+      // independent and both bottleneck on Claude latency. If only one
+      // artifact is stale, the other call is skipped.
+      const calls = [];
+      if (summaryStale) {
+        calls.push(
+          fetch('/api/admin/regenerate-summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prospect_id: prospectId, language: newLang })
+          }).catch(e => ({ ok: false, error: e?.message }))
+        );
+      }
+      if (dashboardStale) {
+        calls.push(generateDashboard({ language: newLang, force: true }));
+      } else {
+        // generateDashboard handles its own render(); if we skipped it, do
+        // a manual detail refetch so the new summary appears.
+        calls.push(
+          (async () => {
+            const fresh = await apiGet(`/prospects?id=${encodeURIComponent(prospectId)}`);
+            if (state.selectedId === prospectId) state.detail = fresh;
+            state.editor.iframeBuster = Date.now();
+          })()
+        );
+      }
+      await Promise.all(calls);
+      state.generating = false;
+      render();
     });
   });
 
