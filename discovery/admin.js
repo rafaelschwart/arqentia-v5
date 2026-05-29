@@ -35,7 +35,12 @@ const state = {
     data: null,
     loading: false,
     error: null
-  }
+  },
+  // Set by regenerateProspectContent() while a language-regen is in flight.
+  // null when nothing is regenerating; { lang, summary, dashboard, startedAt }
+  // when work is in progress. Drives the inline loading overlays on the
+  // summary card + demo iframe + button spinner.
+  regen: null
 };
 
 // Quick-action prompts surfaced as chips in the chat panel
@@ -142,7 +147,10 @@ const STRINGS = {
     'detail.costs':           'API costs',
     'detail.open_demo':       'Open demo full-screen ↗',
     'detail.regen.btn':       '⟳ Regenerate in {lang}',
+    'detail.regen.btn_loading':'Regenerating in {lang}…',
     'detail.regen.title':     'This prospect’s summary and dashboard were generated in a different language. Click to regenerate them in the current admin language.',
+    'detail.regen.summary_loading':   'Regenerating AI summary in {lang}… (10–25 sec)',
+    'detail.regen.dashboard_loading': 'Regenerating personalized dashboard in {lang}… (15–35 sec)',
     'detail.section.summary': '// AI SUMMARY',
     'detail.section.demo':    '// PERSONALIZED DEMO DASHBOARD',
     'detail.section.answers': '// ANSWERS',
@@ -275,7 +283,10 @@ const STRINGS = {
     'detail.costs':           'Costos API',
     'detail.open_demo':       'Abrir demo pantalla completa ↗',
     'detail.regen.btn':       '⟳ Regenerar en {lang}',
+    'detail.regen.btn_loading':'Regenerando en {lang}…',
     'detail.regen.title':     'El resumen y el dashboard de este prospecto fueron generados en otro idioma. Haz clic para regenerarlos en el idioma actual del admin.',
+    'detail.regen.summary_loading':   'Regenerando resumen IA en {lang}… (10–25 seg)',
+    'detail.regen.dashboard_loading': 'Regenerando dashboard personalizado en {lang}… (15–35 seg)',
     'detail.section.summary': '// RESUMEN IA',
     'detail.section.demo':    '// DASHBOARD DE DEMO PERSONALIZADO',
     'detail.section.answers': '// RESPUESTAS',
@@ -1044,7 +1055,17 @@ function renderDetail() {
         </div>
         <div class="adm-detail__actions">
           ${(() => {
+            const inFlight = !!state.regen;
             const d = detectLanguageDrift();
+            // While regen is running, keep the button in its loading state.
+            if (inFlight) {
+              const lang = state.regen.lang.toUpperCase();
+              return `<button type="button" class="adm-btn adm-btn--accent is-loading" data-action="regen-content" disabled aria-busy="true">
+                        <span class="adm-spinner" aria-hidden="true"></span>
+                        ${esc(T('detail.regen.btn_loading').replace('{lang}', lang))}
+                      </button>`;
+            }
+            // Otherwise show the button only when there's actual drift.
             if (!d.any) return '';
             return `<button type="button" class="adm-btn adm-btn--accent" data-action="regen-content"
                       title="${esc(T('detail.regen.title'))}">
@@ -1058,8 +1079,14 @@ function renderDetail() {
       </header>
 
       <!-- AI SUMMARY -->
-      <section class="adm-section">
+      <section class="adm-section${state.regen && state.regen.summary ? ' adm-section--regenerating' : ''}">
         <p class="adm-section__title">${esc(T('detail.section.summary'))}</p>
+        ${state.regen && state.regen.summary ? `
+          <div class="adm-regen-overlay" role="status" aria-live="polite">
+            <span class="adm-spinner adm-spinner--lg" aria-hidden="true"></span>
+            <span class="adm-regen-overlay__msg">${esc(T('detail.regen.summary_loading').replace('{lang}', state.regen.lang.toUpperCase()))}</span>
+          </div>
+        ` : ''}
         ${summary
           ? `<div class="adm-summary">${summary.summary_text || '<em>—</em>'}</div>
              <div class="adm-kv" style="margin-top:12px;">
@@ -1072,8 +1099,14 @@ function renderDetail() {
       </section>
 
       <!-- DEMO PREVIEW -->
-      <section class="adm-section">
+      <section class="adm-section${state.regen && state.regen.dashboard ? ' adm-section--regenerating' : ''}">
         <p class="adm-section__title">${esc(T('detail.section.demo'))}</p>
+        ${state.regen && state.regen.dashboard ? `
+          <div class="adm-regen-overlay" role="status" aria-live="polite">
+            <span class="adm-spinner adm-spinner--lg" aria-hidden="true"></span>
+            <span class="adm-regen-overlay__msg">${esc(T('detail.regen.dashboard_loading').replace('{lang}', state.regen.lang.toUpperCase()))}</span>
+          </div>
+        ` : ''}
         ${demo
           ? `<div class="adm-demo is-loading">
                <div class="adm-demo__bar">
@@ -1378,8 +1411,15 @@ async function regenerateProspectContent(newLang) {
   const prospectId = state.selectedId;
   state.generating = true;
   state.generateError = null;
-  // Toast so the user knows work is happening — generateDashboard sets
-  // its own spinner state, but the summary regen is otherwise invisible.
+  // Track the target language + which artifacts are in flight so the UI
+  // can show specific overlays ("Regenerating in EN…") on the affected
+  // surfaces (summary card, demo iframe) instead of just a corner toast.
+  state.regen = {
+    lang: newLang,
+    summary: !!drift.summaryStale,
+    dashboard: !!drift.dashboardStale,
+    startedAt: Date.now()
+  };
   showAdminToast(T('admin.lang.regen_toast'));
   render();
 
@@ -1424,6 +1464,7 @@ async function regenerateProspectContent(newLang) {
   }
 
   state.generating = false;
+  state.regen = null;
   render();
   if (failed) {
     showAdminToast(T('admin.lang.regen_error'), 'error');
