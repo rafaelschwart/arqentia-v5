@@ -7,8 +7,12 @@
 // 2-sentence summary regenerates in the new language so admin reads
 // everything consistently.
 //
-// Pairs with /api/admin/dashboard-generate which already accepts a language
-// override and regenerates the personalized demo payload the same way.
+// Defensive about the profile_summaries schema:
+//   - sector_classification is NOT NULL → fall back to prospect.sector_id
+//     or 'servicios' if Claude returns null.
+//   - generated_by is NOT NULL → fall back to 'claude-haiku-4-5'.
+//   - summary_language may or may not exist (migration 0004 optional) →
+//     try the upsert with it, retry without it if any schema error fires.
 
 import { supabase } from '../_lib/supabase.js';
 import { logEvent } from '../_lib/events.js';
@@ -53,38 +57,50 @@ async function handler(req, res) {
     return sendError(res, 502, 'Summary regeneration failed', { detail: e?.message });
   }
 
-  // Update profile_summaries with the new text + meta. Stamp language on the
-  // row so the admin UI can detect language drift on the next view.
   const meta = result.meta || {};
-  const { error: upErr } = await supabase.from('profile_summaries').upsert({
+
+  // Build the upsert row with safe defaults for NOT NULL columns.
+  // sector_classification falls back to prospect.sector_id (already validated
+  // at intake) then to 'servicios' so an aggressive Claude null doesn't
+  // 500 the request.
+  const baseRow = {
     prospect_id:           prospectId,
-    summary_text:          result.summary,
-    sector_classification: meta.sector ?? null,
+    summary_text:          result.summary || '',
+    sector_classification: meta.sector || prospect.sector_id || 'servicios',
     suggested_capability:  meta.capability ?? null,
     est_hours_saved:       meta.est_hours_saved ?? null,
     est_payback_months:    meta.est_payback_months ?? null,
-    summary_language:      lang,
     generated_at:          new Date().toISOString(),
-    generated_by:          result.model
-  });
+    generated_by:          result.model || 'claude-haiku-4-5'
+  };
+
+  // First attempt: include summary_language (works if migration 0004 ran).
+  let upErr;
+  ({ error: upErr } = await supabase.from('profile_summaries').upsert({
+    ...baseRow,
+    summary_language: lang
+  }));
+
+  // If the column doesn't exist (common when 0004 hasn't been applied yet),
+  // retry without it. Match defensively — PostgREST's error messages vary
+  // across versions but "summary_language" is always somewhere in the body
+  // OR the error code is 42703 (undefined_column).
   if (upErr) {
-    // summary_language may not exist as a column in older Supabase schemas —
-    // try again without it so the regen still lands.
-    if (/summary_language/.test(upErr.message || '')) {
-      const { error: upErr2 } = await supabase.from('profile_summaries').upsert({
-        prospect_id:           prospectId,
-        summary_text:          result.summary,
-        sector_classification: meta.sector ?? null,
-        suggested_capability:  meta.capability ?? null,
-        est_hours_saved:       meta.est_hours_saved ?? null,
-        est_payback_months:    meta.est_payback_months ?? null,
-        generated_at:          new Date().toISOString(),
-        generated_by:          result.model
-      });
-      if (upErr2) return sendError(res, 500, 'Could not persist summary', { detail: upErr2.message });
-    } else {
-      return sendError(res, 500, 'Could not persist summary', { detail: upErr.message });
+    const msg = String(upErr.message || '');
+    const isMissingCol = /summary_language/i.test(msg)
+      || /column.*does not exist/i.test(msg)
+      || upErr.code === '42703'
+      || upErr.code === 'PGRST204';
+    if (isMissingCol) {
+      console.warn('[admin/regenerate-summary] summary_language column missing, retrying without:', msg);
+      ({ error: upErr } = await supabase.from('profile_summaries').upsert(baseRow));
     }
+  }
+
+  if (upErr) {
+    console.error('[admin/regenerate-summary] upsert failed:', upErr.message, '| code:', upErr.code);
+    await logEvent({ prospect_id: prospectId, type: 'summary_regen_error', payload: { error: upErr.message, code: upErr.code, source: 'admin', stage: 'persist' } });
+    return sendError(res, 500, 'Could not persist summary', { detail: upErr.message, code: upErr.code });
   }
 
   await logEvent({
