@@ -22,6 +22,10 @@ async function handler(req, res) {
   if (!body?.prospect_id) return sendError(res, 400, 'Missing prospect_id');
 
   const prospectId = body.prospect_id;
+  // Admin can override the generation language (e.g. when they toggle the
+  // admin UI from ES to EN and want the prospect's dashboard to follow).
+  // Falls back to the prospect's recorded discovery language.
+  const overrideLang = (body.language === 'en' || body.language === 'es') ? body.language : null;
 
   const [
     { data: prospect, error: pErr },
@@ -46,7 +50,7 @@ async function handler(req, res) {
       prospect,
       answers: answers || [],
       summary,
-      language: prospect.language
+      language: overrideLang || prospect.language || 'en'
     });
   } catch (e) {
     if (e.code === 'ENV_MISSING') throw e;
@@ -55,9 +59,13 @@ async function handler(req, res) {
     return sendError(res, 502, 'Generation failed', { detail: e?.message });
   }
 
+  // Stamp the language onto the payload so the admin UI can detect drift
+  // between admin chrome language and dashboard language on next view.
+  const stampedPayload = { ...result.payload, language: overrideLang || prospect.language || 'en' };
+
   const { error: upErr } = await supabase.from('demo_payloads').upsert({
     prospect_id:  prospectId,
-    payload:      result.payload,
+    payload:      stampedPayload,
     generated_at: new Date().toISOString(),
     generated_by: result.model,
     edited:       false
@@ -70,8 +78,9 @@ async function handler(req, res) {
 
   return sendJson(res, 200, {
     ok: true,
-    payload: result.payload,
+    payload: stampedPayload,
     pipeline: result.pipeline_version,
+    language: stampedPayload.language,
     wall_ms: Date.now() - t0
   });
 }

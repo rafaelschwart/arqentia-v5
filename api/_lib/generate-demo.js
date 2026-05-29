@@ -113,7 +113,7 @@ Rules:
 
   const user = `PROSPECT PROFILE:
 
-Company: ${prospect.company || '—'}
+Company: ${(prospect.company && prospect.company.trim() && prospect.company !== 'null') ? prospect.company : (language === 'es' ? 'su operación' : 'their operation')}
 Name: ${prospect.name || '—'}
 Role: ${prospect.role || '—'}
 Sector: ${prospect.sector_id || summary?.sector_classification || '—'}

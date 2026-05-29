@@ -61,6 +61,19 @@ async function runPass(system, user, maxTokens, passName, prospectId) {
   return parseJson(text, passName);
 }
 
+// Company-name helper: when a prospect goes through voice/text intake but
+// doesn't have a company captured (Q1.company empty), JS template strings
+// interpolate `prospect.company` as the literal string "null", which then
+// shows up in the dashboard headline ("null transforms..."). Always run
+// through this fallback before interpolating.
+function companyName(prospect, language = 'en') {
+  const c = (prospect?.company || '').trim();
+  if (c && c !== 'null' && c.toLowerCase() !== 'undefined') return c;
+  const n = (prospect?.name || '').trim().split(/\s+/)[0];
+  if (n) return language === 'es' ? `la operación de ${n}` : `${n}'s operation`;
+  return language === 'es' ? 'su operación' : 'their operation';
+}
+
 // ─── PASS 1+2 MERGED — INTAKE ANALYSIS ────────────────────────────────────────
 // Combines sector intelligence + pain quantification into one call.
 async function passIntake({ A, prospect }, language) {
@@ -136,11 +149,12 @@ async function passInsights({ intake, kpiDefs, prospect }, language) {
   const { sector_intel, pain_analysis } = intake;
   const kpi1 = kpiDefs.kpis?.[0];
 
+  const co = companyName(prospect, language);
   const system = `Ops consultant writing 3 specific dashboard insights. Return ONLY compact JSON, no preamble.
 Schema: {"insights":[{"headline":"<bold outcome sentence>","body":"<1-2 sentences citing company name + specific number/system/route>"}]}
-Rules: exactly 3 insights. Each MUST mention "${prospect.company}" or a specific route/system/SKU. Write like an analyst who studied their data — no generic advice. Text in ${lang}.`;
+Rules: exactly 3 insights. Each MUST mention "${co}" or a specific route/system/SKU. Write like an analyst who studied their data — no generic advice. NEVER use the literal word "null". Text in ${lang}.`;
 
-  const user = `company:${prospect.company}
+  const user = `company:${co}
 bottleneck:${pain_analysis.primary_bottleneck} friction:${pain_analysis.data_friction}
 hours_lost:${pain_analysis.weekly_hours_lost} risks:${JSON.stringify(pain_analysis.exposed_risks)}
 kpi1:"${kpi1 ? `${kpi1.label} ${kpi1.current_value}→${kpi1.target_value}` : ''}"
@@ -159,7 +173,7 @@ Schema: {"recommended_tier":"Discovery only|Build only|Build + Maintenance|Maint
 Text in ${lang}.`;
 
   const user = `capability:${capabilityMatch.combined_code} why:${capabilityMatch.why_this_fits}
-decision_unit:${JSON.stringify(A['Q9'])} headcount:${JSON.stringify(A['Q1']?.headcount)} company:${prospect.company}`;
+decision_unit:${JSON.stringify(A['Q9'])} headcount:${JSON.stringify(A['Q1']?.headcount)} company:${companyName(prospect, language)}`;
 
   return runPass(system, user, 300, 'Pass6/Pricing', prospect?.id);
 }
@@ -170,18 +184,27 @@ async function passSynthesize({
 }, language) {
   const lang = language === 'es' ? 'Spanish' : 'English';
 
+  // Sector labels are picked from the same map used in discovery/profile.js
+  // so a dashboard generated in Spanish reads "Manufactura" and one generated
+  // in English reads "Manufacturing" — drives the eyebrow on the demo card.
   const SECTOR_LABELS = {
-    distribucion: 'Distribución', retail: 'Retail', manufactura: 'Manufactura',
-    servicios: 'Servicios', logistica: 'Logística', salud: 'Salud',
-    construccion: 'Construcción', educacion: 'Educación'
+    distribucion: { en: 'Distribution',  es: 'Distribución' },
+    retail:       { en: 'Retail',        es: 'Retail' },
+    manufactura:  { en: 'Manufacturing', es: 'Manufactura' },
+    servicios:    { en: 'Services',      es: 'Servicios' },
+    logistica:    { en: 'Logistics',     es: 'Logística' },
+    salud:        { en: 'Healthcare',    es: 'Salud' },
+    construccion: { en: 'Construction',  es: 'Construcción' },
+    educacion:    { en: 'Education',     es: 'Educación' }
   };
   const sectorId    = prospect.sector_id || 'servicios';
-  const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
+  const sectorLabel = SECTOR_LABELS[sectorId]?.[language] || SECTOR_LABELS[sectorId]?.en || sectorId;
   const { sector_intel, pain_analysis } = intake;
 
   const kpi1 = kpiDefs.kpis?.[0];
   const isDecline = kpi1?.metric_type === 'time_reduction' || kpi1?.metric_type === 'cost_reduction';
 
+  const co = companyName(prospect, language);
   const system = `Assemble final demo dashboard JSON. Return ONLY valid JSON — no preamble, no markdown fences.
 
 Required schema (all fields mandatory):
@@ -197,13 +220,16 @@ Required schema (all fields mandatory):
 }
 
 Rules:
+- The "company" field MUST be "${co}" (never the literal word "null").
+- The headline MUST use that company name and MUST NOT start with the literal word "null".
 - Exactly 6 KPIs — convert kpiDefs: value=target_value, delta=delta_label, context=context. KPI #1 = prospect's Q8 target exactly.
 - Chart: 12 numbers for KPI #1 metric. ${isDecline ? 'DECLINING trajectory — starts high, ends at target_value.' : 'RISING trajectory — starts at baseline, rises to target.'}
 - Exactly 3 insights (from insights input).
 - Exactly 5 activity rows. Use sector-specific detail: SAP Business One, Lima routes, bodega names, WhatsApp notifications if distribución.
-- All customer-facing text in ${lang}. Mono labels (// ...) stay English-style.`;
+- All customer-facing text in ${lang}. Mono labels (// ...) stay English-style.
+- "sector_label" MUST be the ${lang}-localized version of the sector (not the slug).`;
 
-  const user = `company:${prospect.company} name:${prospect.name} sector:${sectorId} sector_label:${sectorLabel}
+  const user = `company:${co} name:${prospect.name || ''} sector:${sectorId} sector_label:${sectorLabel}
 
 KPI_DEFS:${JSON.stringify(kpiDefs.kpis)}
 

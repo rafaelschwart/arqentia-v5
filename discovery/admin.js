@@ -171,6 +171,7 @@ const STRINGS = {
     'editor.send':            'Send →',
     'editor.attach':          'Attach image',
     'editor.mainAgent':       'Main agent',
+    'admin.lang.regen_prompt':'Regenerate this prospect’s dashboard in the new language? This will overwrite the current edits.',
     'empty.detail.eye':       '// no prospect selected',
     'empty.detail.heading':   'Pick someone on the left.',
     'empty.detail.sub':       'Their profile summary, full discovery answers, and the personalized demo dashboard show up here. Edits route through the 12-agent suite.',
@@ -298,6 +299,7 @@ const STRINGS = {
     'editor.send':            'Enviar →',
     'editor.attach':          'Adjuntar imagen',
     'editor.mainAgent':       'Agente principal',
+    'admin.lang.regen_prompt':'¿Regenerar el dashboard de este prospecto en el nuevo idioma? Se sobrescribirán las ediciones actuales.',
     'empty.detail.eye':       '// sin prospecto seleccionado',
     'empty.detail.heading':   'Elige a alguien a la izquierda.',
     'empty.detail.sub':       'Su resumen, sus respuestas del discovery y el dashboard personalizado aparecen aquí. Las ediciones pasan por los 12 agentes especializados.',
@@ -1289,16 +1291,19 @@ async function runRowAction(id, action) {
   }
 }
 
-async function generateDashboard() {
+async function generateDashboard({ language, force } = {}) {
   if (state.generating || !state.selectedId) return;
   state.generating = true;
   state.generateError = null;
   render();
   try {
+    const body = { prospect_id: state.selectedId };
+    if (language) body.language = language;
+    if (force)    body.force    = true;
     const r = await fetch('/api/admin/dashboard-generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prospect_id: state.selectedId })
+      body: JSON.stringify(body)
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -1514,11 +1519,30 @@ function bindEvents() {
   const logoutBtn = document.getElementById('adm-logout');
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
-  // EN/ES toggle — persists to localStorage + re-renders
+  // EN/ES toggle — persists to localStorage + re-renders. When a prospect
+  // detail is open AND its demo payload was generated in the OTHER language,
+  // offer to regenerate the dashboard in the new language so the iframe
+  // matches the admin chrome (otherwise admin reads "Manufactura" while
+  // chrome reads "Manufacturing").
   document.querySelectorAll('[data-set-lang]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setAdmLang(btn.dataset.setLang);
+    btn.addEventListener('click', async () => {
+      const newLang = btn.dataset.setLang;
+      const oldLang = admLang();
+      setAdmLang(newLang);
       render();
+      if (newLang === oldLang) return;
+
+      // If a prospect detail is open and they have a generated demo whose
+      // payload language doesn't match, prompt to regenerate.
+      const detail = state.detail;
+      const payloadLang = detail?.demo?.payload?.language
+        || detail?.prospect?.language
+        || null;
+      if (!detail || !detail.demo || !payloadLang || payloadLang === newLang) return;
+
+      const ok = confirm(T('admin.lang.regen_prompt'));
+      if (!ok) return;
+      await generateDashboard({ language: newLang, force: true });
     });
   });
 
