@@ -1,0 +1,26 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": ".claude/agents/**/*.md"
+    }
+  },
+  "rewrites": [
+    { "source": "/discovery/p/:token/demo", "destination": "/discovery/p-demo?token=:token" },
+    { "source": "/discovery/p/:token",      "destination": "/discovery/p?token=:token" },
+    { "source": "/discovery/login",         "destination": "/discovery/login" },
+    { "source": "/discovery/text",          "destination": "/discovery/text" },
+    { "source": "/discovery/voice",         "destination": "/discovery/voice" },
+    { "source": "/arqentia/admin",          "destination": "/discovery/admin" }
+  ],
+  "headers": [
+    {
+      "source": "/api/discovery/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}

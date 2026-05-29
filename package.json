@@ -1,0 +1,30 @@
+{
+  "name": "arqentia-v5",
+  "version": "5.0.0",
+  "description": "Arqentia website + Discovery tab",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "vercel dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "byte-check": "playwright test homepage-byte-identity.spec.js",
+    "db:apply": "node scripts/apply-migration.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "animejs": "^4.4.1",
+    "bcryptjs": "^2.4.3",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "vitest": "^2.1.0"
+  }
+}

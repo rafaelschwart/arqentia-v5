@@ -1,0 +1,59 @@
+node_modules/
+.env.local
+.env.*.local
+.env*.local
+.vercel/
+.vercel
+.vercel.v4-review.bak/
+.vercel.v4-review.bak2/
+.git.local-history.bak/
+playwright-report/
+test-results/
+discovery/p/*/demo.html
+_templates/dashboards/_drafts/
+
+# Build artifacts
+arqentia-v5.zip
+*.zip
+DEPLOY-v5.md.bak
+
+# Dev / OS noise
+.DS_Store
+Thumbs.db
+*.log
+logs/
+.superpowers/
+.claude/projects/
+.claude/skills/
+.claude/conf/
+
+# Pre-migration / archived
+_pre-migration-backup/
+_ARCHIVED-*/
+_inbox/
+deliverables/
+
+# Loose root-level reference assets (not part of production build).
+# The marketing site uses industries/*.mp4 only — these others are leftovers.
+/orderful.mp4
+/Unwanted*.mp4
+/WhatsApp\ Video*.mp4
+/Industry\ Laptops*.html
+/profile-dashboard.html
+/design-context-transfer.zip
+/skills-lock.json
+
+# Internal specs + drafts
+architecture.md
+brief.md
+dashboard-spec.md
+design-system.md
+docs/
+references/
+v3/
+scripts/
+
+# Folders that aren't tracked because they're branded/asset libraries
+/Arqentia\ Brand/
+/Videos/
+/Videos\ 2/

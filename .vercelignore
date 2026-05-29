@@ -1,0 +1,45 @@
+_design-bundle/
+_mobile-redesign/
+_v4-backup/
+_pre-migration-backup/
+_replace_js.py
+_inbox/
+_ARCHIVED-*/
+audit/
+logs/
+tests/
+scripts/
+references/
+deliverables/
+docs/
+v3/
+Videos/
+Videos\ 2/
+Arqentia\ Brand/
+.superpowers/
+.claude/projects/
+.claude/skills/
+.claude/conf/
+
+# Backups + builds + assets at root that shouldn't ship
+arqentia-v5.zip
+*.zip
+.vercel.v4-review.bak
+.vercel.v4-review.bak2
+.env.local
+.env.production
+
+# Loose root-level files that aren't part of the production site
+orderful.mp4
+Unwanted*.mp4
+WhatsApp\ Video*.mp4
+Industry\ Laptops*.html
+profile-dashboard.html
+design-context-transfer.zip
+skills-lock.json
+
+# Markdown noise (specs, drafts, READMEs) — but KEEP the runtime agent definitions
+# under .claude/agents/dashboard/ so the agent-loader can read them in prod.
+*.md
+!.claude/agents/**/*.md
+!DEPLOY-v5.md
