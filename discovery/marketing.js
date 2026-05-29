@@ -205,14 +205,33 @@ function renderToggle(currentLang) {
 
 function setLang(lang) {
   persistLang(lang);
-  applyLang(lang);
+  // Render the toggle FIRST so it appears immediately even if any later step
+  // throws — the user always has a way to switch back.
   renderToggle(lang);
+  try {
+    applyLang(lang);
+  } catch (e) {
+    // Don't let a translation bug kill the toggle.
+    console.warn('[marketing.js] applyLang failed:', e);
+  }
   document.dispatchEvent(new CustomEvent('arq:lang', { detail: { lang } }));
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
-const initial = detectInitialLang();
-setLang(initial);
+// Wrap boot in a defensive guard so even an unexpected module-load error
+// surfaces in the console instead of silently leaving the page un-toggleable.
+console.info('[marketing.js] loaded v5.4 (' + Object.keys(MARKETING_I18N).length + ' translations)');
+try {
+  const initial = detectInitialLang();
+  const mountCount = document.querySelectorAll('[data-arq-lang-mount]').length;
+  console.info('[marketing.js] booting lang=' + initial + ', mount points=' + mountCount);
+  if (mountCount === 0) {
+    console.warn('[marketing.js] no [data-arq-lang-mount] element found on this page. Toggle will not appear.');
+  }
+  setLang(initial);
+} catch (e) {
+  console.error('[marketing.js] boot failed:', e);
+}
 
 // Late-mounted DOM (carousel slides built lazily, dialogs that hydrate on
 // first open) — re-apply. Debounced via rAF.
