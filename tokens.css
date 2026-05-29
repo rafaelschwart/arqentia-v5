@@ -328,50 +328,52 @@
 
 /* ═══════════════════════════════════════════════════════════════════════
    EN/ES LANGUAGE TOGGLE — appears in the marketing top nav
-   Mounted by discovery/marketing.js into [data-arq-lang-mount]
+   Mounted by discovery/marketing.js into [data-arq-lang-mount].
+   The marketing site is dark-themed by default, so the toggle uses light
+   text-on-dark with an outlined pill silhouette for affordance.
    ═══════════════════════════════════════════════════════════════════════ */
 .arq-langtoggle{
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  letter-spacing: .12em;
+  letter-spacing: .14em;
   text-transform: uppercase;
   margin-right: 12px;
+  padding: 3px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 6px;
+  background: rgba(255,255,255,.04);
 }
 .arq-langtoggle__btn{
   background: transparent;
   border: 0;
-  padding: 4px 6px;
+  padding: 4px 9px;
   cursor: pointer;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
-  color: rgba(0,0,0,.55);
-  transition: color 150ms ease;
+  color: rgba(255,255,255,.62);
+  border-radius: 4px;
+  transition: color 150ms ease, background 150ms ease;
 }
-.arq-langtoggle__btn:hover{ color: #000; }
+.arq-langtoggle__btn:hover{
+  color: #fff;
+  background: rgba(255,255,255,.06);
+}
 .arq-langtoggle__btn.is-active{
-  color: var(--arq, #2563eb);
+  color: #fff;
+  background: var(--signal-pale, #60a5fa);
   font-weight: 600;
 }
-.arq-langtoggle__sep{
-  color: rgba(0,0,0,.22);
-  padding: 0 2px;
+.arq-langtoggle__sep{ display: none; }   /* pill design — no slash separator needed */
+
+/* Light-surface variant (admin/profile chrome) — opt-in via .arq-langtoggle--light */
+.arq-langtoggle--light{
+  border-color: rgba(0,0,0,.18);
+  background: rgba(0,0,0,.03);
 }
-/* Dark nav variants (marketing site dark sections + admin/profile chrome) */
-.is-dark .arq-langtoggle__btn,
-[data-theme="dark"] .arq-langtoggle__btn{
-  color: rgba(255,255,255,.55);
-}
-.is-dark .arq-langtoggle__btn:hover,
-[data-theme="dark"] .arq-langtoggle__btn:hover{ color: #fff; }
-.is-dark .arq-langtoggle__btn.is-active,
-[data-theme="dark"] .arq-langtoggle__btn.is-active{
-  color: var(--signal-pale, #60a5fa);
-}
-.is-dark .arq-langtoggle__sep,
-[data-theme="dark"] .arq-langtoggle__sep{
-  color: rgba(255,255,255,.22);
-}
+.arq-langtoggle--light .arq-langtoggle__btn{ color: rgba(0,0,0,.62); }
+.arq-langtoggle--light .arq-langtoggle__btn:hover{ color: #000; background: rgba(0,0,0,.04); }
+.arq-langtoggle--light .arq-langtoggle__btn.is-active{ color: #fff; background: var(--arq, #2563eb); }
